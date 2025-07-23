@@ -1,4 +1,4 @@
-.PHONY: setup run test clean help db-up db-down db-logs db-shell
+.PHONY: setup run test clean help db-up db-down db-logs db-shell server migrate.up migrate.down make migrate.new
 
 help:
 	@echo "Available commands:"
@@ -53,3 +53,19 @@ db-logs:
 db-shell:
 	@echo "Connecting to database shell..."
 	@docker-compose exec postgres psql -U messaging_user -d messaging_service
+
+server: migrate.up
+	@echo "Starting the server..."
+	@go run main.go serve
+
+migrate.up:
+	@echo "Running migrations..."
+	@go run main.go migrate --direction up
+
+migrate.down:
+	@echo "Rolling back migrations..."
+	@go run main.go migrate --direction down
+
+make migrate.new:
+	@echo "Creating new migration files..."
+	@migrate create -ext sql -dir migrations -seq $(migration_name)

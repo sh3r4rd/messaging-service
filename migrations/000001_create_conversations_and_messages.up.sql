@@ -19,9 +19,9 @@ CREATE TABLE IF NOT EXISTS messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     conversation_id UUID NOT NULL REFERENCES conversations(id),
     sender_id UUID NOT NULL REFERENCES communications(id),
-    provider_id TEXT NOT NULL, -- external message ID
-    message_type TEXT NOT NULL CHECK (message_type IN ('sms', 'email')),
+    provider_id TEXT, -- external message ID
+    message_type TEXT NOT NULL CHECK (message_type IN ('mms', 'sms', 'email')),
     body TEXT,
     attachments TEXT[], 
-    timestamp TIMESTAMP WITH TIME ZONE NOT NULL
+    created_at   TIMESTAMP WITH TIME ZONE NOT NULL
 );
