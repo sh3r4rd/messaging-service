@@ -8,10 +8,13 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/gommon/log"
+
+	"github.com/go-playground/validator/v10"
 )
 
 type Server struct {
 	Repo           repository.Repository
+	Validator      *validator.Validate
 	MessageService *service.ExternalService
 	EmailService   *service.ExternalService
 }
@@ -20,22 +23,33 @@ type Server struct {
 func NewServer(repo repository.Repository) *Server {
 	return &Server{
 		Repo:           repo,
+		Validator:      validator.New(),
 		MessageService: service.NewExternalService(),
 		EmailService:   service.NewExternalService(),
 	}
 }
 
-func (s *Server) CreateMesssage(c echo.Context) error {
-	var msg Message
+func (s *Server) Validate(i interface{}) error {
+	return s.Validator.Struct(i)
+}
+
+func (s *Server) CreateTextMesssage(c echo.Context) error {
+	var msg TextMessage
 
 	if err := json.NewDecoder(c.Request().Body).Decode(&msg); err != nil {
+		log.Errorf("failed to decode payload: %v", err)
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid JSON payload"})
+	}
+
+	if err := s.Validate(&msg); err != nil {
+		log.Errorf("validation error: %v", err)
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	log.Debugf("Received SMS message: %+v\n", msg)
 	err := s.MessageService.SendMessageWithRetries(msg.From, msg.To, msg.Body)
 	if err != nil {
-		log.Errorf("Failed to send message: %v\n", err)
+		log.Errorf("failed to send message: %v\n", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to send message"})
 	}
 

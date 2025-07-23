@@ -5,17 +5,17 @@ import (
 	"hatchapp/internal/pkg/repository"
 )
 
-type Message struct {
-	From        string   `json:"from"`
-	To          string   `json:"to"`
-	Type        string   `json:"type"`
-	Body        string   `json:"body"`
-	Attachments []string `json:"attachments"`
-	ProviderID  string   `json:"messaging_provider_id"`
-	CreatedAt   string   `json:"timestamp"`
+type TextMessage struct {
+	From        string   `json:"from" validate:"required,e164"`                  // E.164 phone number format
+	To          string   `json:"to" validate:"required,e164"`                    // E.164 phone number format
+	Type        string   `json:"type" validate:"required,oneof=sms mms"`         // Restrict to known types
+	Body        string   `json:"body" validate:"required"`                       // Must be non-empty
+	Attachments []string `json:"attachments" validate:"omitempty,dive,required"` // Each attachment must be a valid URL if present
+	ProviderID  string   `json:"messaging_provider_id" validate:"required"`      // Alphanumeric provider ID
+	CreatedAt   string   `json:"timestamp" validate:"required,datetime=2006-01-02T15:04:05Z"`
 }
 
-func (m *Message) ToRepositoryMessage() (repository.Message, error) {
+func (m *TextMessage) ToRepositoryMessage() (repository.Message, error) {
 	msg := repository.Message{
 		From:        m.From,
 		To:          m.To,
@@ -28,8 +28,6 @@ func (m *Message) ToRepositoryMessage() (repository.Message, error) {
 
 	// Determine the communication type based on the message type
 	switch m.Type {
-	case "email":
-		msg.CommunicationType = repository.CommunicationTypeEmail
 	case "sms":
 		msg.CommunicationType = repository.CommunicationTypePhone
 	case "mms":

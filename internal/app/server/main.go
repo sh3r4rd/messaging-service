@@ -14,6 +14,7 @@ import (
 	"hatchapp/internal/pkg/repository"
 
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 )
 
 // Run starts the server with the provided context and command.
@@ -27,8 +28,15 @@ func Run() error {
 	server := NewServer(repo)
 
 	e := echo.New()
+	e.Validator = server
+
 	// Add middleware
-	e.POST("/api/messages/sms", server.CreateMesssage)
+	e.Use(middleware.Logger())
+	e.Use(middleware.Recover())
+	e.Use(middleware.Gzip())
+
+	// Routes
+	e.POST("/api/messages/sms", server.CreateTextMesssage)
 	e.GET("/api/conversations", server.GetConversations)
 	e.GET("/api/conversations/:id/messages", server.GetConversationByID)
 
