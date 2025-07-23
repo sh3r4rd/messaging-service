@@ -16,8 +16,8 @@ const (
 // Message represents the expected JSON payload for SMS messages.
 type Message struct {
 	From              string   `json:"from"`
-	To                string   `json:"to"`
-	CommunicationType string   `json:"communication_type"`
+	To                string   `json:"to,omitempty"`
+	CommunicationType string   `json:"communication_type,omitempty"`
 	Type              string   `json:"type"`
 	Body              string   `json:"body"`
 	Attachments       []string `json:"attachments"`
@@ -27,10 +27,17 @@ type Message struct {
 
 // Conversation represents a conversation in the messaging service.
 type Conversation struct {
-	ID           string    `json:"id"`
-	CreatedAt    string    `json:"created_at"`
-	Participants []string  `json:"participants"`
-	Messages     []Message `json:"messages"`
+	ID           string           `json:"id"`
+	CreatedAt    string           `json:"created_at"`
+	Participants []Communications `json:"participants"`
+	Messages     []Message        `json:"messages,omitempty"`
+}
+
+// Communications represents a communication entity.
+type Communications struct {
+	ID         string `json:"id"`
+	Identifier string `json:"identifier"`
+	Type       string `json:"type"`
 }
 
 func Initialize() error {

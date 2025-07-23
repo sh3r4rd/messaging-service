@@ -21,6 +21,8 @@ func Run() error {
 	e := echo.New()
 	// Add middleware
 	e.POST("/api/messages/sms", server.CreateMesssage)
+	e.GET("/api/conversations", server.GetConversations)
+	e.GET("/api/conversations/:id/messages", server.GetConversationByID)
 
 	fmt.Println("Starting server on :8080...")
 	return e.Start(":8080")

@@ -45,3 +45,26 @@ func (s *Server) CreateMesssage(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, map[string]string{"status": "received", "message_id": msgID.String()})
 }
+
+func (s *Server) GetConversations(c echo.Context) error {
+	conversations, err := s.Repo.GetConversations(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, conversations)
+}
+
+func (s *Server) GetConversationByID(c echo.Context) error {
+	id := c.Param("id")
+	if id == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Conversation ID is required"})
+	}
+
+	conversation, err := s.Repo.GetConversationByID(c.Request().Context(), id)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, conversation)
+}

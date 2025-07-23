@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"fmt"
+	"encoding/json"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -14,6 +14,7 @@ type Repository interface {
 	Ping() error
 	CreateMessage(ctx context.Context, msg Message) (*uuid.UUID, error)
 	GetConversations(ctx context.Context) ([]Conversation, error)
+	GetConversationByID(ctx context.Context, id string) (*Conversation, error)
 }
 
 type PostgresRepository struct {
@@ -68,8 +69,101 @@ func (r *PostgresRepository) CreateMessage(ctx context.Context, msg Message) (*u
 	return &msgID, nil
 }
 func (r *PostgresRepository) GetConversations(ctx context.Context) ([]Conversation, error) {
-	// Implement the logic to retrieve conversations from the database.
-	// This is just a placeholder implementation.
-	fmt.Println("Retrieving conversations...")
-	return []Conversation{}, nil
+	// Implement the logic to retrieve conversations with communications as participants
+
+	// TODO: Paginate conversations
+	const query = `
+		SELECT
+		c.id AS conversation_id,
+		c.created_at,
+		COALESCE(
+			JSON_AGG(
+			JSON_BUILD_OBJECT(
+				'id', comm.id,
+				'identifier', comm.identifier,
+				'type', comm.type
+			)
+			) FILTER (WHERE comm.id IS NOT NULL), '[]'
+		) AS participants
+		FROM conversations c
+		LEFT JOIN conversation_memberships cm ON cm.conversation_id = c.id
+		LEFT JOIN communications comm ON comm.id = cm.communication_id
+		GROUP BY c.id, c.created_at
+		ORDER BY c.created_at DESC;
+	`
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var conversations []Conversation
+	for rows.Next() {
+		var conv Conversation
+		var participantsJSON []byte
+		if err := rows.Scan(&conv.ID, &conv.CreatedAt, &participantsJSON); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(participantsJSON, &conv.Participants); err != nil {
+			return nil, err
+		}
+		conversations = append(conversations, conv)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return conversations, nil
+}
+
+func (r *PostgresRepository) GetConversationByID(ctx context.Context, id string) (*Conversation, error) {
+	const query = `
+		SELECT
+			c.id AS conversation_id,
+			c.created_at,
+			COALESCE(
+				JSON_AGG(
+					DISTINCT JSONB_BUILD_OBJECT(
+						'id', comm.id,
+						'identifier', comm.identifier,
+						'type', comm.type
+					)
+				) FILTER (WHERE comm.id IS NOT NULL), '[]'
+			) AS participants,
+			COALESCE(
+				JSON_AGG(
+					DISTINCT JSONB_BUILD_OBJECT(
+						'from', m.sender_id,
+						'type', m.message_type,
+						'body', m.body,
+						'attachments', m.attachments,
+						'provider_id', m.provider_id,
+						'timestamp', m.created_at,
+						'id', m.id
+					)
+				) FILTER (WHERE m.id IS NOT NULL), '[]'
+			) AS messages
+		FROM conversations c
+		LEFT JOIN conversation_memberships cm ON cm.conversation_id = c.id
+		LEFT JOIN communications comm ON comm.id = cm.communication_id
+		LEFT JOIN messages m ON m.conversation_id = c.id
+		WHERE c.id = $1
+		GROUP BY c.id, c.created_at;
+	`
+	row := r.db.QueryRowContext(ctx, query, id)
+	var conv Conversation
+	var participantsJSON, messagesJSON []byte
+	if err := row.Scan(&conv.ID, &conv.CreatedAt, &participantsJSON, &messagesJSON); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // No conversation found with the given ID
+		}
+		return nil, err
+	}
+	if err := json.Unmarshal(participantsJSON, &conv.Participants); err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(messagesJSON, &conv.Messages); err != nil {
+		return nil, err
+	}
+
+	return &conv, nil
 }

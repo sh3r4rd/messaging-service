@@ -11,7 +11,7 @@ type Message struct {
 	Type        string   `json:"type"`
 	Body        string   `json:"body"`
 	Attachments []string `json:"attachments"`
-	ProviderID  string   `json:"provider_id"`
+	ProviderID  string   `json:"messaging_provider_id"`
 	CreatedAt   string   `json:"timestamp"`
 }
 
