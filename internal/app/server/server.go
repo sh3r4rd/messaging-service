@@ -2,21 +2,26 @@ package server
 
 import (
 	"encoding/json"
-	"fmt"
 	"hatchapp/internal/pkg/repository"
+	"hatchapp/internal/pkg/service"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/gommon/log"
 )
 
 type Server struct {
-	Repo repository.Repository
+	Repo           repository.Repository
+	MessageService *service.ExternalService
+	EmailService   *service.ExternalService
 }
 
 // NewServer creates a new instance of the Server with the provided repository.
 func NewServer(repo repository.Repository) *Server {
 	return &Server{
-		Repo: repo,
+		Repo:           repo,
+		MessageService: service.NewExternalService(),
+		EmailService:   service.NewExternalService(),
 	}
 }
 
@@ -27,7 +32,12 @@ func (s *Server) CreateMesssage(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid JSON payload"})
 	}
 
-	fmt.Printf("Received SMS message: %+v\n", msg)
+	log.Debugf("Received SMS message: %+v\n", msg)
+	err := s.MessageService.SendMessageWithRetries(msg.From, msg.To, msg.Body)
+	if err != nil {
+		log.Errorf("Failed to send message: %v\n", err)
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to send message"})
+	}
 
 	// Convert to repository message
 	repoMsg, err := msg.ToRepositoryMessage()

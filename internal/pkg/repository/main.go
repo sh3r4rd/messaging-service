@@ -29,7 +29,7 @@ type Message struct {
 type Conversation struct {
 	ID           string           `json:"id"`
 	CreatedAt    string           `json:"created_at"`
-	Participants []Communications `json:"participants"`
+	Participants []Communications `json:"participants,omitempty"`
 	Messages     []Message        `json:"messages,omitempty"`
 }
 

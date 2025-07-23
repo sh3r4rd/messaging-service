@@ -1,7 +1,15 @@
 package server
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"hatchapp/internal/pkg/repository"
 
@@ -24,6 +32,25 @@ func Run() error {
 	e.GET("/api/conversations", server.GetConversations)
 	e.GET("/api/conversations/:id/messages", server.GetConversationByID)
 
-	fmt.Println("Starting server on :8080...")
-	return e.Start(":8080")
+	go func() {
+		err := e.Start(":8080")
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("Failed to start server: %v\n", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+	<-quit
+	log.Println("Shutdown signal received, starting graceful shutdown...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := e.Shutdown(ctx); err != nil {
+		log.Fatalf("Server shutdown failed: %v\n", err)
+	}
+
+	log.Println("Server exited gracefully")
+	return nil
 }

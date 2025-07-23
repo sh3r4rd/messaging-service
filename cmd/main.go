@@ -107,6 +107,8 @@ func Run() {
 					if err != nil {
 						return fmt.Errorf("failed to start server: %w", err)
 					}
+
+					fmt.Println("Server has shut down gracefully")
 					return nil
 				},
 			},

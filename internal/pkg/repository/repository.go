@@ -122,16 +122,7 @@ func (r *PostgresRepository) GetConversationByID(ctx context.Context, id string)
 			c.created_at,
 			COALESCE(
 				JSON_AGG(
-					DISTINCT JSONB_BUILD_OBJECT(
-						'id', comm.id,
-						'identifier', comm.identifier,
-						'type', comm.type
-					)
-				) FILTER (WHERE comm.id IS NOT NULL), '[]'
-			) AS participants,
-			COALESCE(
-				JSON_AGG(
-					DISTINCT JSONB_BUILD_OBJECT(
+					JSONB_BUILD_OBJECT(
 						'from', m.sender_id,
 						'type', m.message_type,
 						'body', m.body,
@@ -140,25 +131,21 @@ func (r *PostgresRepository) GetConversationByID(ctx context.Context, id string)
 						'timestamp', m.created_at,
 						'id', m.id
 					)
+					ORDER BY m.created_at
 				) FILTER (WHERE m.id IS NOT NULL), '[]'
 			) AS messages
 		FROM conversations c
-		LEFT JOIN conversation_memberships cm ON cm.conversation_id = c.id
-		LEFT JOIN communications comm ON comm.id = cm.communication_id
 		LEFT JOIN messages m ON m.conversation_id = c.id
 		WHERE c.id = $1
 		GROUP BY c.id, c.created_at;
 	`
 	row := r.db.QueryRowContext(ctx, query, id)
 	var conv Conversation
-	var participantsJSON, messagesJSON []byte
-	if err := row.Scan(&conv.ID, &conv.CreatedAt, &participantsJSON, &messagesJSON); err != nil {
+	var messagesJSON []byte
+	if err := row.Scan(&conv.ID, &conv.CreatedAt, &messagesJSON); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil // No conversation found with the given ID
 		}
-		return nil, err
-	}
-	if err := json.Unmarshal(participantsJSON, &conv.Participants); err != nil {
 		return nil, err
 	}
 	if err := json.Unmarshal(messagesJSON, &conv.Messages); err != nil {
