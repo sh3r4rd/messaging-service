@@ -12,6 +12,9 @@ CREATE TABLE IF NOT EXISTS conversations (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
+-- Speeds up ORDER BY on conversations.created_at
+CREATE INDEX idx_conversations_created_at ON conversations(created_at DESC);
+
 CREATE TABLE IF NOT EXISTS conversation_memberships (
     conversation_id BIGSERIAL NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
     communication_id BIGSERIAL NOT NULL REFERENCES communications(id) ON DELETE CASCADE,
@@ -28,3 +31,9 @@ CREATE TABLE IF NOT EXISTS messages (
     attachments TEXT[],
     created_at TIMESTAMP WITH TIME ZONE NOT NULL
 );
+
+-- Speeds up JOIN: conversations -> messages and ORDER BY messages.created_at
+CREATE INDEX idx_messages_conversation_id_created_at ON messages(conversation_id, created_at);
+
+-- Speeds up JOIN: messages -> communications BY messages.sender_id
+CREATE INDEX idx_messages_sender_id ON messages(sender_id);

@@ -7,6 +7,7 @@ const (
 
 // Message represents the expected JSON payload for SMS messages.
 type Message struct {
+	ID                int64    `json:"id,omitempty"`
 	From              string   `json:"from"`
 	To                string   `json:"to,omitempty"`
 	CommunicationType string   `json:"communication_type,omitempty"`

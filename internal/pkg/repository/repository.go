@@ -110,7 +110,7 @@ func (r *PostgresRepository) GetConversations(ctx context.Context) ([]Conversati
 		FROM conversations c
 		LEFT JOIN conversation_memberships cm ON cm.conversation_id = c.id
 		LEFT JOIN communications comm ON comm.id = cm.communication_id
-		GROUP BY c.id, c.created_at
+		GROUP BY c.id
 		ORDER BY c.created_at DESC;
 	`
 	rows, err := r.db.QueryContext(ctx, query)
@@ -145,8 +145,9 @@ func (r *PostgresRepository) GetConversationByID(ctx context.Context, id string)
 			c.id AS conversation_id,
 			c.created_at,
 			COALESCE(
-				JSON_AGG(
+				JSONB_AGG(
 					JSONB_BUILD_OBJECT(
+						'id', m.id,
 						'from', comm.identifier,
 						'type', m.message_type,
 						'body', m.body,
@@ -162,7 +163,7 @@ func (r *PostgresRepository) GetConversationByID(ctx context.Context, id string)
 		LEFT JOIN messages m ON m.conversation_id = c.id
 		LEFT JOIN communications comm ON comm.id = m.sender_id
 		WHERE c.id = $1
-		GROUP BY c.id, c.created_at;
+		GROUP BY c.id;
 	`
 
 	var conv Conversation
