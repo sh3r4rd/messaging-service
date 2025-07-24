@@ -173,7 +173,7 @@ func (r *PostgresRepository) GetConversationByID(ctx context.Context, id string)
 	if err := row.Scan(&conv.ID, &conv.CreatedAt, &messagesJSON); err != nil {
 		if err == sql.ErrNoRows {
 			log.Info("no conversation found with id:", id)
-			return nil, nil
+			return nil, apperrors.DBErrorNotFound
 		}
 
 		return nil, apperrors.NewDBError(err, fmt.Sprintf("failed to get conversation with id: %s", id))

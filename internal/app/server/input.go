@@ -11,7 +11,7 @@ type TextMessage struct {
 	Type        string   `json:"type" validate:"required,oneof=sms mms"`         // Restrict to known types
 	Body        string   `json:"body" validate:"required"`                       // Must be non-empty
 	Attachments []string `json:"attachments" validate:"omitempty,dive,required"` // Each attachment must be a valid URL if present
-	ProviderID  string   `json:"messaging_provider_id" validate:"required"`      // Alphanumeric provider ID
+	ProviderID  string   `json:"messaging_provider_id"`
 	CreatedAt   string   `json:"timestamp" validate:"required,datetime=2006-01-02T15:04:05Z"`
 }
 
@@ -34,6 +34,30 @@ func (m *TextMessage) ToRepositoryMessage() (repository.Message, error) {
 		msg.CommunicationType = repository.CommunicationTypePhone
 	default:
 		return msg, fmt.Errorf("unknown message type: %s", m.Type)
+	}
+
+	return msg, nil
+}
+
+type EmailMessage struct {
+	From        string   `json:"from" validate:"required,email"`                 // Valid email
+	To          string   `json:"to" validate:"required,email"`                   // Valid email
+	Body        string   `json:"body" validate:"required"`                       // Non-empty body
+	Attachments []string `json:"attachments" validate:"omitempty,dive,required"` // Each attachment must be a valid URL if present
+	ProviderID  string   `json:"xillio_id"`
+	CreatedAt   string   `json:"timestamp" validate:"required,datetime=2006-01-02T15:04:05Z"`
+}
+
+func (m *EmailMessage) ToRepositoryMessage() (repository.Message, error) {
+	msg := repository.Message{
+		From:              m.From,
+		To:                m.To,
+		Type:              repository.CommunicationTypeEmail,
+		CommunicationType: repository.CommunicationTypeEmail,
+		Body:              m.Body,
+		Attachments:       m.Attachments,
+		ProviderID:        m.ProviderID,
+		CreatedAt:         m.CreatedAt,
 	}
 
 	return msg, nil

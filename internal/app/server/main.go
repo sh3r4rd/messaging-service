@@ -29,6 +29,9 @@ func Initialize(server *Server) *echo.Echo {
 
 	// Routes
 	e.POST("/api/messages/sms", server.CreateTextMesssage)
+	e.POST("/api/webhooks/sms", server.CreateTextMesssage)
+	e.POST("/api/messages/email", server.CreateEmailMessage)
+	e.POST("/api/webhooks/email", server.CreateEmailMessage)
 	e.GET("/api/conversations", server.GetConversations)
 	e.GET("/api/conversations/:id/messages", server.GetConversationByID)
 

@@ -1,5 +1,12 @@
 package apperrors
 
+import "errors"
+
+var DBErrorNotFound = NewDBError(
+	errors.New("resource not found"),
+	"The requested database resource was not found",
+)
+
 type DBError struct {
 	Err     error
 	Message string

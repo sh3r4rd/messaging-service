@@ -59,10 +59,10 @@ func NewExternalServiceWithError(statusCode int, body string) *ExternalService {
 	}
 }
 
-func (s *ExternalService) SendMessageWithRetries(from, to, body string) error {
+func (s *ExternalService) SendMessageWithRetries(from, to, body string, attachments []string) error {
 	// Implement retry logic here with exponential backoff
 	for s.retryCount < MaxRetries {
-		resp, err := s.sendMessage(from, to, body)
+		resp, err := s.sendMessage(from, to, body, attachments)
 		if err != nil {
 			time.Sleep(time.Duration(s.retryCount) * time.Second) // Exponential backoff
 			log.Printf("Attempt %d failed: %v", s.retryCount+1, err)
@@ -90,11 +90,11 @@ func (s *ExternalService) SendMessageWithRetries(from, to, body string) error {
 	return fmt.Errorf("failed to send message after %d retries", MaxRetries)
 }
 
-func (s *ExternalService) sendMessage(from, to, body string) (*http.Response, error) {
+func (s *ExternalService) sendMessage(from, to, body string, attachments []string) (*http.Response, error) {
 	// Simulate sending the message
-	fmt.Printf("Sending SMS from %s to %s: %s\n", from, to, body)
+	fmt.Printf("Sending SMS from %s to %s: %s with attachments [%+v]\n", from, to, body, attachments)
 
-	s.Request.Body = fmt.Sprintf(`{"from":"%s","to":"%s","body":"%s"}`, from, to, body)
+	s.Request.Body = fmt.Sprintf(`{"from":"%s","to":"%s","body":"%s","attachments":%+v}`, from, to, body, attachments)
 	resp, err := s.Request.Do()
 	if err != nil {
 		return nil, fmt.Errorf("failed to send message: %w", err)

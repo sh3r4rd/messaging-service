@@ -46,10 +46,13 @@ func (s *Server) CreateTextMesssage(c echo.Context) error {
 		return apperrors.ApiErrorResponse(c, err, http.StatusUnprocessableEntity, "invalid request input")
 	}
 
-	log.Debugf("Received SMS message: %+v\n", msg)
-	err := s.MessageService.SendMessageWithRetries(msg.From, msg.To, msg.Body)
-	if err != nil {
-		return apperrors.ApiErrorResponse(c, err, http.StatusInternalServerError, "failed to send message via provider")
+	// If the request is for the SMS endpoint, send the message via the external service.
+	// If the request is for the webhook endpoint, we assume the message has already been sent by the provider.
+	if path := c.Path(); path == "/api/messages/sms" {
+		err := s.MessageService.SendMessageWithRetries(msg.From, msg.To, msg.Body, msg.Attachments)
+		if err != nil {
+			return apperrors.ApiErrorResponse(c, err, http.StatusInternalServerError, "failed to send message via provider")
+		}
 	}
 
 	// Convert to repository message
@@ -62,6 +65,40 @@ func (s *Server) CreateTextMesssage(c echo.Context) error {
 	msgID, err := s.Repo.CreateMessage(c.Request().Context(), repoMsg)
 	if err != nil {
 		return apperrors.ApiErrorResponse(c, err, http.StatusInternalServerError, "failed to store text message")
+	}
+
+	return c.JSON(http.StatusCreated, map[string]string{"status": "received", "message_id": msgID.String()})
+}
+
+func (s *Server) CreateEmailMessage(c echo.Context) error {
+	var emailMsg EmailMessage
+
+	if err := json.NewDecoder(c.Request().Body).Decode(&emailMsg); err != nil {
+		return apperrors.ApiErrorResponse(c, err, http.StatusUnprocessableEntity, "invalid payload: failed to decode json")
+	}
+
+	if err := s.Validate(&emailMsg); err != nil {
+		return apperrors.ApiErrorResponse(c, err, http.StatusUnprocessableEntity, "invalid request input")
+	}
+
+	// If the request is for the email endpoint, send the message via the external service.
+	if path := c.Path(); path == "/api/messages/email" {
+		err := s.EmailService.SendMessageWithRetries(emailMsg.From, emailMsg.To, emailMsg.Body, emailMsg.Attachments)
+		if err != nil {
+			return apperrors.ApiErrorResponse(c, err, http.StatusInternalServerError, "failed to send email via provider")
+		}
+	}
+
+	// Convert to repository message
+	repoEmailMsg, err := emailMsg.ToRepositoryMessage()
+	if err != nil {
+		log.Errorf("failed to convert email message: %v", err)
+		return apperrors.ApiErrorResponse(c, err, http.StatusUnprocessableEntity, "failed to convert email message")
+	}
+
+	msgID, err := s.Repo.CreateMessage(c.Request().Context(), repoEmailMsg)
+	if err != nil {
+		return apperrors.ApiErrorResponse(c, err, http.StatusInternalServerError, "failed to store email message")
 	}
 
 	return c.JSON(http.StatusCreated, map[string]string{"status": "received", "message_id": msgID.String()})

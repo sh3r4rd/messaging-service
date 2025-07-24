@@ -19,6 +19,11 @@ func ApiErrorResponse(eCtx echo.Context, errInput error, statusCode int, message
 
 	var dbErr *DBError
 	if errors.As(errInput, &dbErr) {
+		if errors.Is(dbErr, DBErrorNotFound) {
+			log.Warn("database resource not found")
+			return eCtx.JSON(http.StatusNotFound, map[string]string{"error": "Resource Not Found"})
+		}
+
 		log.Errorf("database error occurred: %s", dbErr.Err)
 		return eCtx.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal Server Error"})
 	}
