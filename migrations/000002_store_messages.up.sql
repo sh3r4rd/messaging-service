@@ -2,8 +2,8 @@ CREATE OR REPLACE FUNCTION create_message(
     p_from               text,
     p_to                 text,
     p_provider_id        text,
-    p_message_type       text,
-    p_communication_type text,
+    p_message_type       message_type,
+    p_communication_type communication_type,
     p_body               text,
     p_attachments        text[],
     p_created_at          timestamptz
@@ -19,11 +19,11 @@ BEGIN
     ------------------------------------------------------------------
     -- 1. Ensure both communications exist (upsert‑then‑select pattern)
     ------------------------------------------------------------------
-    INSERT INTO communications (identifier, type)
+    INSERT INTO communications (identifier, communication_type)
     VALUES (p_from, p_communication_type)
     ON CONFLICT (identifier) DO NOTHING;
 
-    INSERT INTO communications (identifier, type)
+    INSERT INTO communications (identifier, communication_type)
     VALUES (p_to, p_communication_type)
     ON CONFLICT (identifier) DO NOTHING;
 

@@ -1,4 +1,4 @@
-.PHONY: setup run test clean help db-up db-down db-logs db-shell server migrate.up migrate.down make migrate.new debug
+.PHONY: setup run test clean help db-up db-down db-logs db-shell server migrate.up migrate.down make migrate.new debug integrations.test
 
 help:
 	@echo "Available commands:"
@@ -57,6 +57,13 @@ db-shell:
 server: migrate.up
 	@echo "Starting the server..."
 	@go run main.go serve
+
+integrations.test:
+	@echo "Running integration tests..."
+	@echo "Starting test database if not running..."
+	@docker-compose up -d
+	@echo "Running test script..."
+	@go test -v -count=1 ./internal/app/integrationtests
 
 migrate.up:
 	@echo "Running migrations..."

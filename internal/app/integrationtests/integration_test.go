@@ -268,7 +268,7 @@ func TestMessagesAndConversations(t *testing.T) {
 
 		// Get the conversation by ID
 		conversationID := conversations[0].ID
-		path = fmt.Sprintf("/api/conversations/%s/messages", conversationID)
+		path = fmt.Sprintf("/api/conversations/%d/messages", conversationID)
 		response = oapi.NewRequest().Get(path).GoWithHTTPHandler(t, e)
 		if response.Code() != http.StatusOK {
 			t.Fatalf("Expected status code 200, got %d", response.Code())

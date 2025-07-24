@@ -99,12 +99,12 @@ func (r *PostgresRepository) GetConversations(ctx context.Context) ([]Conversati
 		c.id AS conversation_id,
 		c.created_at,
 		COALESCE(
-			JSON_AGG(
-			JSON_BUILD_OBJECT(
-				'id', comm.id,
-				'identifier', comm.identifier,
-				'type', comm.type
-			)
+			JSONB_AGG(
+				JSONB_BUILD_OBJECT(
+					'id', comm.id,
+					'identifier', comm.identifier,
+					'type', comm.communication_type
+				)
 			) FILTER (WHERE comm.id IS NOT NULL), '[]'
 		) AS participants
 		FROM conversations c

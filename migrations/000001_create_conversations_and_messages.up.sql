@@ -1,7 +1,10 @@
+CREATE TYPE message_type AS ENUM ('mms', 'sms', 'email');
+CREATE TYPE communication_type AS ENUM ('phone', 'email');
+
 CREATE TABLE IF NOT EXISTS communications (
     id BIGSERIAL PRIMARY KEY,
     identifier TEXT NOT NULL UNIQUE, -- e.g. "+18045551234" or "user@example.com"
-    type TEXT NOT NULL CHECK (type IN ('phone', 'email'))
+    communication_type communication_type NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS conversations (
@@ -20,8 +23,8 @@ CREATE TABLE IF NOT EXISTS messages (
     conversation_id BIGSERIAL NOT NULL REFERENCES conversations(id),
     sender_id BIGSERIAL NOT NULL REFERENCES communications(id),
     provider_id TEXT, -- external message ID
-    message_type TEXT NOT NULL CHECK (message_type IN ('mms', 'sms', 'email')),
+    message_type message_type NOT NULL,
     body TEXT,
-    attachments TEXT[], 
-    created_at   TIMESTAMP WITH TIME ZONE NOT NULL
+    attachments TEXT[],
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL
 );
