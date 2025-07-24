@@ -19,7 +19,7 @@ type Message struct {
 
 // Conversation represents a conversation in the messaging service.
 type Conversation struct {
-	ID           string           `json:"id"`
+	ID           int64            `json:"id"`
 	CreatedAt    string           `json:"created_at"`
 	Participants []Communications `json:"participants,omitempty"`
 	Messages     []Message        `json:"messages,omitempty"`
@@ -27,7 +27,7 @@ type Conversation struct {
 
 // Communications represents a communication entity.
 type Communications struct {
-	ID         string `json:"id"`
+	ID         int64  `json:"id"`
 	Identifier string `json:"identifier"`
 	Type       string `json:"type"`
 }

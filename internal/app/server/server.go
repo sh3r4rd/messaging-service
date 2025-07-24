@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"hatchapp/internal/pkg/apperrors"
 	"hatchapp/internal/pkg/repository"
 	"hatchapp/internal/pkg/service"
@@ -67,7 +68,7 @@ func (s *Server) CreateTextMesssage(c echo.Context) error {
 		return apperrors.ApiErrorResponse(c, err, http.StatusInternalServerError, "failed to store text message")
 	}
 
-	return c.JSON(http.StatusCreated, map[string]string{"status": "received", "message_id": msgID.String()})
+	return c.JSON(http.StatusCreated, map[string]string{"status": "received", "message_id": fmt.Sprintf("%d", *msgID)})
 }
 
 func (s *Server) CreateEmailMessage(c echo.Context) error {
@@ -101,7 +102,7 @@ func (s *Server) CreateEmailMessage(c echo.Context) error {
 		return apperrors.ApiErrorResponse(c, err, http.StatusInternalServerError, "failed to store email message")
 	}
 
-	return c.JSON(http.StatusCreated, map[string]string{"status": "received", "message_id": msgID.String()})
+	return c.JSON(http.StatusCreated, map[string]string{"status": "received", "message_id": fmt.Sprintf("%d", *msgID)})
 }
 
 func (s *Server) GetConversations(c echo.Context) error {

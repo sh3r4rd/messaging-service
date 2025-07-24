@@ -7,14 +7,14 @@ CREATE OR REPLACE FUNCTION create_message(
     p_body               text,
     p_attachments        text[],
     p_created_at          timestamptz
-) RETURNS uuid
+) RETURNS bigint
 LANGUAGE plpgsql
 AS $$
 DECLARE
-    v_from_id         uuid;
-    v_to_id           uuid;
-    v_conversation_id uuid;
-    v_message_id      uuid;
+    v_from_id         bigint;
+    v_to_id           bigint;
+    v_conversation_id bigint;
+    v_message_id      bigint;
 BEGIN
     ------------------------------------------------------------------
     -- 1. Ensure both communications exist (upsert‑then‑select pattern)
@@ -46,9 +46,9 @@ BEGIN
     -- 3. If none exists, create conversation and memberships
     ------------------------------------------------------------------
     IF v_conversation_id IS NULL THEN
-        v_conversation_id := gen_random_uuid();
-        INSERT INTO conversations (id, created_at)
-        VALUES (v_conversation_id, now());
+        INSERT INTO conversations (created_at)
+        VALUES (now())
+        RETURNING id INTO v_conversation_id;
 
         INSERT INTO conversation_memberships (conversation_id, communication_id)
         VALUES
@@ -60,10 +60,7 @@ BEGIN
     ------------------------------------------------------------------
     -- 4. Insert the message
     ------------------------------------------------------------------
-    v_message_id := gen_random_uuid();
-
     INSERT INTO messages (
-        id, 
         conversation_id, 
         sender_id,
         provider_id,        
@@ -73,7 +70,6 @@ BEGIN
         created_at
     )
     VALUES (
-        v_message_id,       
         v_conversation_id, 
         v_from_id,
         p_provider_id,      
@@ -81,8 +77,8 @@ BEGIN
         p_body,             
         p_attachments,
         p_created_at
-    );
-
+    )
+    RETURNING id INTO v_message_id;
     ------------------------------------------------------------------
     RETURN v_message_id;  -- handy if the caller needs it
 END;

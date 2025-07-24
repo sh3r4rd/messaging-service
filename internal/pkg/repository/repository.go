@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"hatchapp/internal/pkg/apperrors"
 
-	"github.com/google/uuid"
 	"github.com/labstack/gommon/log"
 	"github.com/lib/pq"
 )
@@ -15,7 +14,7 @@ import (
 // Repository is the interface for the messaging repository.
 type Repository interface {
 	Ping() error
-	CreateMessage(ctx context.Context, msg Message) (*uuid.UUID, error)
+	CreateMessage(ctx context.Context, msg Message) (*int64, error)
 	GetConversations(ctx context.Context) ([]Conversation, error)
 	GetConversationByID(ctx context.Context, id string) (*Conversation, error)
 	Close() error
@@ -51,7 +50,7 @@ func (r *PostgresRepository) GetDriver() *sql.DB {
 	return r.db
 }
 
-func (r *PostgresRepository) CreateMessage(ctx context.Context, msg Message) (*uuid.UUID, error) {
+func (r *PostgresRepository) CreateMessage(ctx context.Context, msg Message) (*int64, error) {
 	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{
 		Isolation: sql.LevelSerializable, // safest when concurrent inserts are possible
 	})
@@ -72,7 +71,7 @@ func (r *PostgresRepository) CreateMessage(ctx context.Context, msg Message) (*u
 			$8  -- p_created_at
 		)
 	`
-	var msgID uuid.UUID
+	var msgID int64
 	if err := tx.QueryRowContext(
 		ctx,
 		query,
