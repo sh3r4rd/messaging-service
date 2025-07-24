@@ -1,18 +1,26 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"hatchapp/config"
 
 	"github.com/labstack/gommon/log"
 )
 
 var repo Repository
 
-func Initialize() error {
+func Initialize(ctx context.Context) error {
 	log.Info("Initializing repository...")
 
-	db, err := sql.Open("postgres", "postgres://messaging_user:messaging_password@localhost:5432/messaging_service?sslmode=disable")
+	connectionString, found := config.GetValueFromConfig(ctx, "db_connection_string")
+	if !found {
+		return errors.New("database connection string not found in context")
+	}
+
+	db, err := sql.Open("postgres", connectionString)
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}

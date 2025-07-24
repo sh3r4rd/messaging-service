@@ -56,6 +56,7 @@ func Run() error {
 		}
 	}()
 
+	// Handle graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-quit
