@@ -6,7 +6,7 @@ I've added integrations tests and two services to the `docker-compose.yml` file:
 - a test database (I use the other database for running the app in dev mode)
 - the messaging service, primarily to run migrations on the test database on startup
 
-You can run the integration tests using
+Once the test database is availabe and the migrations have run, you can run the integration tests using
 
 ```bash
 make integrations.test
