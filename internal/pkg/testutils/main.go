@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"hatchapp/internal/app/server"
 	"hatchapp/internal/pkg/repository"
+	"hatchapp/internal/pkg/service"
 	"log"
 
 	"github.com/labstack/echo/v4"
@@ -32,8 +33,12 @@ func TeardownTestEnvironment() {
 	repo.Close()
 }
 
-func NewServer() *echo.Echo {
+type ServiceError struct {
+	Message string `json:"message"`
+}
+
+func NewServer(emailService, textService *service.ExternalService) *echo.Echo {
 	repo, _ := repository.GetRepository()
-	e := server.Initialize(server.NewServer(repo))
+	e := server.Initialize(server.NewServer(repo, emailService, textService))
 	return e
 }

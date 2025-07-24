@@ -11,7 +11,9 @@ import (
 	"syscall"
 	"time"
 
+	"hatchapp/config"
 	"hatchapp/internal/pkg/repository"
+	"hatchapp/internal/pkg/service"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -39,14 +41,35 @@ func Initialize(server *Server) *echo.Echo {
 }
 
 // Run starts the server with the provided context and command.
-func Run() error {
-
+func Run(ctx context.Context) error {
 	repo, err := repository.GetRepository()
 	if err != nil {
 		return fmt.Errorf("repository not initialized: %w", err)
 	}
 
-	server := NewServer(repo)
+	sendGridAccountID, found := config.GetValueFromConfig(ctx, "sendgrid_account_sid")
+	if !found {
+		return errors.New("sendgrid_account_id not found in config")
+	}
+
+	sendGridAPIKey, found := config.GetValueFromConfig(ctx, "sendgrid_api_key")
+	if !found {
+		return errors.New("sendgrid_api_key not found in config")
+	}
+
+	twilioAccountSID, found := config.GetValueFromConfig(ctx, "twilio_account_sid")
+	if !found {
+		return errors.New("twilio_account_sid not found in config")
+	}
+
+	twilioAPIKey, found := config.GetValueFromConfig(ctx, "twilio_api_key")
+	if !found {
+		return errors.New("twilio_api_key not found in config")
+	}
+
+	emailService := service.NewEmailService(sendGridAccountID, sendGridAPIKey)
+	textService := service.NewTextService(twilioAccountSID, twilioAPIKey)
+	server := NewServer(repo, emailService, textService)
 	e := Initialize(server)
 
 	go func() {

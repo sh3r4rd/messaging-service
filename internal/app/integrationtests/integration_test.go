@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"hatchapp/internal/app/server"
 	"hatchapp/internal/pkg/repository"
+	"hatchapp/internal/pkg/service"
 	"hatchapp/internal/pkg/testutils"
 	"net/http"
 	"os"
@@ -34,7 +35,9 @@ func TestMessagesAndConversations(t *testing.T) {
 	cleaner := dbcleaner.New()
 	cleaner.SetEngine(postgres)
 
-	e := testutils.NewServer()
+	emailService := service.NewEmailService("apiKey", "accountID")
+	textService := service.NewTextService("apiKey", "accountID")
+	e := testutils.NewServer(emailService, textService)
 
 	t.Run("send and save SMS message", func(t *testing.T) {
 		cleaner.Acquire(tables...)
@@ -191,6 +194,33 @@ func TestMessagesAndConversations(t *testing.T) {
 		}
 		assert.Equal(t, "received", result["status"])
 		assert.NotEmpty(t, result["message_id"], "Expected message_id to be present in response")
+	})
+
+	t.Run("handle service request failure", func(t *testing.T) {
+		cleaner.Acquire(tables...)
+		defer cleaner.Clean(tables...)
+
+		emailService := service.NewEmailService("apiKey", "accountID")
+		textService := service.NewTextServiceWithError("apiKey", "accountID", http.StatusTooManyRequests, "Rate limit exceeded")
+		e := testutils.NewServer(emailService, textService)
+
+		path := "/api/messages/sms"
+		body := server.TextMessage{
+			From:        "+1234567890",
+			To:          "+0987654321",
+			Type:        "sms",
+			Body:        "Hello, this is a test message.",
+			Attachments: []string{},
+			ProviderID:  "provider123",
+			CreatedAt:   "2023-10-01T12:00:00Z",
+		}
+
+		response := oapi.NewRequest().WithHeader("Content-Type", "application/json").Post(path).WithJsonBody(body).GoWithHTTPHandler(t, e)
+		if response.Code() != http.StatusInternalServerError {
+			t.Fatalf("Expected status code 500, got %d", response.Code())
+		}
+
+		assert.Equal(t, textService.RetryCount, 3, "expected multiple retries due to rate limiting")
 	})
 
 	t.Run("get conversations", func(t *testing.T) {

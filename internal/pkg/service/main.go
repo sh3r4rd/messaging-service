@@ -2,17 +2,20 @@ package service
 
 import (
 	"fmt"
+	"hatchapp/internal/pkg/apperrors"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/labstack/gommon/log"
 )
 
 const MaxRetries = 3
 
 // MockRequest is a mock implementation of an HTTP request for testing purposes.
 type MockRequest struct {
+	Headers  map[string]string
 	Method   string
 	URL      string
 	Body     string
@@ -30,12 +33,51 @@ func (r *MockRequest) Do() (*http.Response, error) {
 
 type ExternalService struct {
 	Request    MockRequest
-	retryCount int
+	RetryCount int
 }
 
-func NewExternalService() *ExternalService {
+func NewEmailService(apiKey, accountID string) *ExternalService {
 	return &ExternalService{
 		Request: MockRequest{
+			Headers: map[string]string{
+				"X-API-Key":    apiKey,
+				"X-Account-ID": accountID,
+			},
+			Method: http.MethodPost,
+			URL:    "https://api.sendgrid.com/emails",
+
+			Response: &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(`{"status":"success"}`)),
+			},
+		},
+	}
+}
+
+func NewEmailServiceWithError(apiKey, accountID string, statusCode int, body string) *ExternalService {
+	return &ExternalService{
+		Request: MockRequest{
+			Headers: map[string]string{
+				"X-API-Key":    apiKey,
+				"X-Account-ID": accountID,
+			},
+			Method: http.MethodPost,
+			URL:    "https://api.sendgrid.com/emails",
+			Response: &http.Response{
+				StatusCode: statusCode,
+				Body:       io.NopCloser(strings.NewReader(body)),
+			},
+		},
+	}
+}
+
+func NewTextService(apiKey, accountID string) *ExternalService {
+	return &ExternalService{
+		Request: MockRequest{
+			Headers: map[string]string{
+				"X-API-Key":    apiKey,
+				"X-Account-ID": accountID,
+			},
 			Method: http.MethodPost,
 			URL:    "https://api.twilio.com/messages",
 			Response: &http.Response{
@@ -46,9 +88,13 @@ func NewExternalService() *ExternalService {
 	}
 }
 
-func NewExternalServiceWithError(statusCode int, body string) *ExternalService {
+func NewTextServiceWithError(apiKey, accountID string, statusCode int, body string) *ExternalService {
 	return &ExternalService{
 		Request: MockRequest{
+			Headers: map[string]string{
+				"X-API-Key":    apiKey,
+				"X-Account-ID": accountID,
+			},
 			Method: http.MethodPost,
 			URL:    "https://api.twilio.com/messages",
 			Response: &http.Response{
@@ -60,31 +106,42 @@ func NewExternalServiceWithError(statusCode int, body string) *ExternalService {
 }
 
 func (s *ExternalService) SendMessageWithRetries(from, to, body string, attachments []string) error {
-	// Implement retry logic here with exponential backoff
-	for s.retryCount < MaxRetries {
+	// Many API services return a 429 Too Many Requests status code when rate limiting.
+	// The `Retry-After` header can be used to determine how long to wait before retrying (exponential backoff).
+	// I'm opting for a simple retry mechanism here.
+
+	for s.RetryCount < MaxRetries {
 		resp, err := s.sendMessage(from, to, body, attachments)
 		if err != nil {
-			time.Sleep(time.Duration(s.retryCount) * time.Second) // Exponential backoff
-			log.Printf("Attempt %d failed: %v", s.retryCount+1, err)
+			time.Sleep(time.Duration(s.RetryCount+1) * time.Millisecond)
+			log.Warnf("Attempt %d failed: %v", s.RetryCount+1, err)
 			continue
 		}
 
 		switch resp.StatusCode {
-		case http.StatusInternalServerError:
-			fmt.Printf("Retrying due to server error (%d/%d)...\n", s.retryCount+1, MaxRetries)
-			continue
+		case http.StatusUnauthorized:
+			return apperrors.NewServiceError(err, "unauthorized: check your API key or account ID")
+		case http.StatusNotFound:
+			return apperrors.NewServiceError(err, "not found")
+		case http.StatusForbidden:
+			return apperrors.NewServiceError(err, "access forbidden")
 		case http.StatusBadRequest:
-			fmt.Printf("Bad request (%d/%d): %v\n", s.retryCount+1, MaxRetries, err)
+			return apperrors.NewServiceError(err, "bad request")
+		case http.StatusInternalServerError:
+			log.Warnf("Retrying due to server error (%d/%d)...\n", s.RetryCount+1, MaxRetries)
+			s.RetryCount++
 			continue
 		case http.StatusTooManyRequests:
-			fmt.Printf("Rate limit exceeded (%d/%d): %v\n", s.retryCount+1, MaxRetries, err)
+			log.Warnf("Rate limit exceeded (%d/%d): %v\n", s.RetryCount+1, MaxRetries, err)
+			s.RetryCount++
 			continue
 		case http.StatusOK:
-			fmt.Println("Message sent successfully")
+			log.Infof("Message sent successfully")
 			return nil
+		default:
+			log.Warnf("Unexpected status code %d: %v", resp.StatusCode, err)
+			return apperrors.NewServiceError(err, fmt.Sprintf("unexpected status code from service: %d", resp.StatusCode))
 		}
-
-		s.retryCount++
 	}
 
 	return fmt.Errorf("failed to send message after %d retries", MaxRetries)

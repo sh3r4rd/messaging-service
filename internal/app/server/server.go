@@ -23,12 +23,12 @@ type Server struct {
 }
 
 // NewServer creates a new instance of the Server with the provided repository.
-func NewServer(repo repository.Repository) *Server {
+func NewServer(repo repository.Repository, emailService, textService *service.ExternalService) *Server {
 	return &Server{
 		Repo:           repo,
 		Validator:      validator.New(),
-		MessageService: service.NewExternalService(),
-		EmailService:   service.NewExternalService(),
+		MessageService: textService,
+		EmailService:   emailService,
 	}
 }
 
@@ -59,7 +59,6 @@ func (s *Server) CreateTextMesssage(c echo.Context) error {
 	// Convert to repository message
 	repoMsg, err := msg.ToRepositoryMessage()
 	if err != nil {
-		log.Errorf("failed to convert message: %v", err)
 		return apperrors.ApiErrorResponse(c, err, http.StatusUnprocessableEntity, "failed to convert message")
 	}
 

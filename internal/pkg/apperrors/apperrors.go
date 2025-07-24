@@ -17,6 +17,12 @@ func ApiErrorResponse(eCtx echo.Context, errInput error, statusCode int, message
 		return eCtx.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal Server Error"})
 	}
 
+	var serviceErr *ServiceError
+	if errors.As(errInput, &serviceErr) {
+		log.Errorf("service error occurred: %s", serviceErr.Err)
+		return eCtx.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal Server Error"})
+	}
+
 	var dbErr *DBError
 	if errors.As(errInput, &dbErr) {
 		if errors.Is(dbErr, DBErrorNotFound) {
@@ -35,6 +41,12 @@ func ApiErrorResponse(eCtx echo.Context, errInput error, statusCode int, message
 		return eCtx.JSON(http.StatusUnprocessableEntity, map[string]string{
 			"error": validationErr.Error(),
 		})
+	}
+
+	var httpErr *HTTPError
+	if errors.As(errInput, &httpErr) {
+		log.Errorf("HTTP error occurred: %s", httpErr.Err)
+		return eCtx.JSON(httpErr.StatusCode, map[string]string{"error": httpErr.Message})
 	}
 
 	log.Errorf("uncaught error: %s", errInput.Error())

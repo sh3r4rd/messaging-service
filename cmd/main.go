@@ -196,7 +196,7 @@ func Run() {
 						return fmt.Errorf("failed to initialize repository: %w", err)
 					}
 
-					err = server.Run()
+					err = server.Run(ctx)
 					if err != nil {
 						return fmt.Errorf("failed to start server: %w", err)
 					}
