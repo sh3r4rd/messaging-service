@@ -1,0 +1,40 @@
+package apperrors
+
+import (
+	"errors"
+	"net/http"
+
+	"github.com/go-playground/validator/v10"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/gommon/log"
+)
+
+func ApiErrorResponse(eCtx echo.Context, errInput error, statusCode int, message string) error {
+	// There really isn't a reason for this function to ever be called with errInput == nil,
+	// but we're covering the case for completeness.
+	if errInput == nil {
+		log.Debug("cannot build an error response from a nil error")
+		return eCtx.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal Server Error"})
+	}
+
+	var dbErr *DBError
+	if errors.As(errInput, &dbErr) {
+		log.Errorf("database error occurred: %s", dbErr.Err)
+		return eCtx.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal Server Error"})
+	}
+
+	var validationErr validator.ValidationErrors
+	if errors.As(errInput, &validationErr) {
+		log.Errorf("unprocessable entity: %s", errInput.Error())
+
+		return eCtx.JSON(http.StatusUnprocessableEntity, map[string]string{
+			"error": validationErr.Error(),
+		})
+	}
+
+	log.Errorf("uncaught error: %s", errInput.Error())
+	return eCtx.JSON(http.StatusInternalServerError, map[string]string{
+		"error":   "Internal Server Error",
+		"message": message,
+	})
+}

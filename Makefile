@@ -1,4 +1,4 @@
-.PHONY: setup run test clean help db-up db-down db-logs db-shell server migrate.up migrate.down make migrate.new
+.PHONY: setup run test clean help db-up db-down db-logs db-shell server migrate.up migrate.down make migrate.new debug
 
 help:
 	@echo "Available commands:"
@@ -66,6 +66,10 @@ migrate.down:
 	@echo "Rolling back migrations..."
 	@go run main.go migrate --direction down
 
-make migrate.new:
+migrate.new:
 	@echo "Creating new migration files..."
 	@migrate create -ext sql -dir migrations -seq $(migration_name)
+
+debug:
+	@echo "Running the application in debug mode..."
+	@dlv debug  --listen=:2345 --headless=true --api-version=2 main.go -- serve 

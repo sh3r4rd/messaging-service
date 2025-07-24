@@ -37,7 +37,7 @@ func NewExternalService() *ExternalService {
 	return &ExternalService{
 		Request: MockRequest{
 			Method: http.MethodPost,
-			URL:    "https://api.example.com/messages",
+			URL:    "https://api.twilio.com/messages",
 			Response: &http.Response{
 				StatusCode: http.StatusOK,
 				Body:       io.NopCloser(strings.NewReader(`{"status":"success"}`)),
@@ -50,7 +50,7 @@ func NewExternalServiceWithError(statusCode int, body string) *ExternalService {
 	return &ExternalService{
 		Request: MockRequest{
 			Method: http.MethodPost,
-			URL:    "https://api.example.com/messages",
+			URL:    "https://api.twilio.com/messages",
 			Response: &http.Response{
 				StatusCode: statusCode,
 				Body:       io.NopCloser(strings.NewReader(body)),

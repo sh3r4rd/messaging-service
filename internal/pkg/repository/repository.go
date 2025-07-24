@@ -4,8 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"hatchapp/internal/pkg/apperrors"
 
 	"github.com/google/uuid"
+	"github.com/labstack/gommon/log"
 	"github.com/lib/pq"
 )
 
@@ -59,19 +62,16 @@ func (r *PostgresRepository) CreateMessage(ctx context.Context, msg Message) (*u
 		pq.Array(msg.Attachments),
 		msg.CreatedAt,
 	).Scan(&msgID); err != nil {
-		return nil, err
+		return nil, apperrors.NewDBError(err, "failed to create message")
 	}
 
-	// TODO: add custom error handling
 	if err := tx.Commit(); err != nil {
-		return nil, err
+		log.Errorf("failed to commit transaction: %v", err)
+		return nil, apperrors.NewDBError(err, "failed to commit transaction")
 	}
 	return &msgID, nil
 }
 func (r *PostgresRepository) GetConversations(ctx context.Context) ([]Conversation, error) {
-	// Implement the logic to retrieve conversations with communications as participants
-
-	// TODO: Paginate conversations
 	const query = `
 		SELECT
 		c.id AS conversation_id,
@@ -101,11 +101,13 @@ func (r *PostgresRepository) GetConversations(ctx context.Context) ([]Conversati
 		var conv Conversation
 		var participantsJSON []byte
 		if err := rows.Scan(&conv.ID, &conv.CreatedAt, &participantsJSON); err != nil {
-			return nil, err
+			return nil, apperrors.NewDBError(err, "failed to get conversations")
 		}
+
 		if err := json.Unmarshal(participantsJSON, &conv.Participants); err != nil {
-			return nil, err
+			return nil, apperrors.NewDBError(err, "failed to unmarshal participants for conversation")
 		}
+
 		conversations = append(conversations, conv)
 	}
 	if err := rows.Err(); err != nil {
@@ -139,17 +141,22 @@ func (r *PostgresRepository) GetConversationByID(ctx context.Context, id string)
 		WHERE c.id = $1
 		GROUP BY c.id, c.created_at;
 	`
-	row := r.db.QueryRowContext(ctx, query, id)
+
 	var conv Conversation
 	var messagesJSON []byte
+	row := r.db.QueryRowContext(ctx, query, id)
+
 	if err := row.Scan(&conv.ID, &conv.CreatedAt, &messagesJSON); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, nil // No conversation found with the given ID
+			log.Info("no conversation found with id:", id)
+			return nil, nil
 		}
-		return nil, err
+
+		return nil, apperrors.NewDBError(err, fmt.Sprintf("failed to get conversation with id: %s", id))
 	}
+
 	if err := json.Unmarshal(messagesJSON, &conv.Messages); err != nil {
-		return nil, err
+		return nil, apperrors.NewDBError(err, "failed to unmarshal conversation messages")
 	}
 
 	return &conv, nil
