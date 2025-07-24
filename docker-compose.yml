@@ -19,5 +19,40 @@ services:
       timeout: 5s
       retries: 5
 
+  testdb:
+    image: postgres:15-alpine
+    container_name: messaging-service-test-db
+    environment:
+      POSTGRES_DB: messaging_service_test
+      POSTGRES_USER: messaging_user
+      POSTGRES_PASSWORD: messaging_password
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U messaging_user -d messaging_service_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  migrate-testdb:
+    image: golang:1.24.5-alpine
+    container_name: messaging-service-migrate-testdb
+    depends_on:
+      testdb:
+        condition: service_healthy
+    volumes:
+      - ./:/app
+    working_dir: /app
+    command: [
+      "go", "run", "main.go", "migrate", "--direction", "up"
+    ]
+    restart: "no"
+    environment:
+      - DB_HOST=testdb
+      - DB_PORT=5432
+      - DB_NAME=messaging_service_test
+      - DB_USER=messaging_user
+      - DB_PASSWORD=messaging_password
+
 volumes:
   postgres_data: 

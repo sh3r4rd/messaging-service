@@ -64,7 +64,7 @@ func (s *Server) CreateTextMesssage(c echo.Context) error {
 		return apperrors.ApiErrorResponse(c, err, http.StatusInternalServerError, "failed to store text message")
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{"status": "received", "message_id": msgID.String()})
+	return c.JSON(http.StatusCreated, map[string]string{"status": "received", "message_id": msgID.String()})
 }
 
 func (s *Server) GetConversations(c echo.Context) error {

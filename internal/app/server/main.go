@@ -17,16 +17,8 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 )
 
-// Run starts the server with the provided context and command.
-func Run() error {
-
-	repo, err := repository.GetRepository()
-	if err != nil {
-		return fmt.Errorf("repository not initialized: %w", err)
-	}
-
-	server := NewServer(repo)
-
+// NewServer initializes a new server instance with the provided repository.
+func Initialize(server *Server) *echo.Echo {
 	e := echo.New()
 	e.Validator = server
 
@@ -39,6 +31,20 @@ func Run() error {
 	e.POST("/api/messages/sms", server.CreateTextMesssage)
 	e.GET("/api/conversations", server.GetConversations)
 	e.GET("/api/conversations/:id/messages", server.GetConversationByID)
+
+	return e
+}
+
+// Run starts the server with the provided context and command.
+func Run() error {
+
+	repo, err := repository.GetRepository()
+	if err != nil {
+		return fmt.Errorf("repository not initialized: %w", err)
+	}
+
+	server := NewServer(repo)
+	e := Initialize(server)
 
 	go func() {
 		err := e.Start(":8080")

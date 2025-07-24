@@ -18,6 +18,8 @@ type Repository interface {
 	CreateMessage(ctx context.Context, msg Message) (*uuid.UUID, error)
 	GetConversations(ctx context.Context) ([]Conversation, error)
 	GetConversationByID(ctx context.Context, id string) (*Conversation, error)
+	Close() error
+	GetDriver() *sql.DB
 }
 
 type PostgresRepository struct {
@@ -26,6 +28,27 @@ type PostgresRepository struct {
 
 func (r *PostgresRepository) Ping() error {
 	return r.db.Ping()
+}
+
+func (r *PostgresRepository) Close() error {
+	if r.db != nil {
+		if err := r.db.Close(); err != nil {
+			log.Errorf("failed to close database connection: %v", err)
+			return apperrors.NewDBError(err, "failed to close database connection")
+		}
+		log.Info("Database connection closed successfully")
+		return nil
+	}
+	log.Warn("Attempted to close a nil database connection, ignoring.")
+	return nil
+}
+
+func (r *PostgresRepository) GetDriver() *sql.DB {
+	if r.db == nil {
+		log.Error("Attempted to get a nil database connection, returning nil.")
+		return nil
+	}
+	return r.db
 }
 
 func (r *PostgresRepository) CreateMessage(ctx context.Context, msg Message) (*uuid.UUID, error) {
@@ -125,7 +148,7 @@ func (r *PostgresRepository) GetConversationByID(ctx context.Context, id string)
 			COALESCE(
 				JSON_AGG(
 					JSONB_BUILD_OBJECT(
-						'from', m.sender_id,
+						'from', comm.identifier,
 						'type', m.message_type,
 						'body', m.body,
 						'attachments', m.attachments,
@@ -138,6 +161,7 @@ func (r *PostgresRepository) GetConversationByID(ctx context.Context, id string)
 			) AS messages
 		FROM conversations c
 		LEFT JOIN messages m ON m.conversation_id = c.id
+		LEFT JOIN communications comm ON comm.id = m.sender_id
 		WHERE c.id = $1
 		GROUP BY c.id, c.created_at;
 	`

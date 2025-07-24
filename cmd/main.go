@@ -30,11 +30,49 @@ func Run() {
 						Value: "up",
 						Usage: "direction for the migration",
 					},
+					&cli.StringFlag{
+						Name:    "db-username",
+						Value:   "messaging_user",
+						Usage:   "database username",
+						Sources: cli.EnvVars("DB_USERNAME"),
+					},
+					&cli.StringFlag{
+						Name:    "db-password",
+						Value:   "messaging_password",
+						Usage:   "database password",
+						Sources: cli.EnvVars("DB_PASSWORD"),
+					},
+					&cli.StringFlag{
+						Name:    "db-host",
+						Value:   "localhost",
+						Usage:   "database host",
+						Sources: cli.EnvVars("DB_HOST"),
+					},
+					&cli.StringFlag{
+						Name:    "db-port",
+						Value:   "5432",
+						Usage:   "database port",
+						Sources: cli.EnvVars("DB_PORT"),
+					},
+					&cli.StringFlag{
+						Name:    "db-name",
+						Value:   "messaging_service",
+						Usage:   "database name",
+						Sources: cli.EnvVars("DB_NAME"),
+					},
 				},
 				Usage: "Run database migrations",
 				Action: func(ctx context.Context, cliCmd *cli.Command) error {
 					fmt.Println("Preparing migrations...")
-					db, err := sql.Open("postgres", "postgres://messaging_user:messaging_password@localhost:5432/messaging_service?sslmode=disable")
+
+					host := cliCmd.String("db-host")
+					port := cliCmd.String("db-port")
+					username := cliCmd.String("db-username")
+					password := cliCmd.String("db-password")
+					dbName := cliCmd.String("db-name")
+
+					connectionString := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", username, password, host, port, dbName)
+					db, err := sql.Open("postgres", connectionString)
 					if err != nil {
 						return fmt.Errorf("failed to connect to database: %w", err)
 					}
