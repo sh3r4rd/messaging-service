@@ -5,6 +5,11 @@ const (
 	CommunicationTypePhone = "phone"
 )
 
+const (
+	MessageStatusSuccess = "success"
+	MessageStatusFailed  = "failed"
+)
+
 // Message represents the expected JSON payload for SMS messages.
 type Message struct {
 	ID                int64    `json:"id,omitempty"`
@@ -15,6 +20,7 @@ type Message struct {
 	Body              string   `json:"body"`
 	Attachments       []string `json:"attachments"`
 	ProviderID        string   `json:"provider_id"`
+	Status            string   `json:"status,omitempty"`
 	CreatedAt         string   `json:"timestamp"`
 }
 

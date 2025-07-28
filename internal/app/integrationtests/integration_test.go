@@ -63,8 +63,8 @@ func TestMessagesAndConversations(t *testing.T) {
 			t.Fatalf("Failed to unmarshal response: %v", err)
 		}
 
-		assert.Equal(t, "received", result["status"])
-		assert.NotEmpty(t, result["message_id"], "Expected message_id to be present in response")
+		assert.NotEmpty(t, result["provider_id"], "expected provider_id to be present in response")
+		assert.NotEmpty(t, result["message_id"], "expected message_id to be present in response")
 	})
 
 	t.Run("send and save MMS message", func(t *testing.T) {
@@ -91,8 +91,8 @@ func TestMessagesAndConversations(t *testing.T) {
 			t.Fatalf("Failed to unmarshal response: %v", err)
 		}
 
-		assert.Equal(t, "received", result["status"])
-		assert.NotEmpty(t, result["message_id"], "Expected message_id to be present in response")
+		assert.NotEmpty(t, result["provider_id"], "expected provider_id to be present in response")
+		assert.NotEmpty(t, result["message_id"], "expected message_id to be present in response")
 	})
 
 	t.Run("incoming SMS via webhook", func(t *testing.T) {
@@ -116,8 +116,8 @@ func TestMessagesAndConversations(t *testing.T) {
 		if err := response.UnmarshalBodyToObject(&result); err != nil {
 			t.Fatalf("Failed to unmarshal response: %v", err)
 		}
-		assert.Equal(t, "received", result["status"])
-		assert.NotEmpty(t, result["message_id"], "Expected message_id to be present in response")
+		assert.NotEmpty(t, result["provider_id"], "expected provider_id to be present in response")
+		assert.NotEmpty(t, result["message_id"], "expected message_id to be present in response")
 	})
 
 	t.Run("incoming MMS via webhook", func(t *testing.T) {
@@ -141,8 +141,8 @@ func TestMessagesAndConversations(t *testing.T) {
 		if err := response.UnmarshalBodyToObject(&result); err != nil {
 			t.Fatalf("Failed to unmarshal response: %v", err)
 		}
-		assert.Equal(t, "received", result["status"])
-		assert.NotEmpty(t, result["message_id"], "Expected message_id to be present in response")
+		assert.NotEmpty(t, result["provider_id"], "expected provider_id to be present in response")
+		assert.NotEmpty(t, result["message_id"], "expected message_id to be present in response")
 	})
 
 	t.Run("send and save email message", func(t *testing.T) {
@@ -166,8 +166,8 @@ func TestMessagesAndConversations(t *testing.T) {
 		if err := response.UnmarshalBodyToObject(&result); err != nil {
 			t.Fatalf("Failed to unmarshal response: %v", err)
 		}
-		assert.Equal(t, "received", result["status"])
-		assert.NotEmpty(t, result["message_id"], "Expected message_id to be present in response")
+		assert.NotEmpty(t, result["provider_id"], "expected provider_id to be present in response")
+		assert.NotEmpty(t, result["message_id"], "expected message_id to be present in response")
 	})
 
 	t.Run("incoming email via webhook", func(t *testing.T) {
@@ -179,6 +179,7 @@ func TestMessagesAndConversations(t *testing.T) {
 			From:        "sender@example.com",
 			To:          "recipient@example.com",
 			Body:        "Hello, this is a test email.",
+			ProviderID:  "provider123",
 			Attachments: []string{},
 			CreatedAt:   "2023-10-01T12:00:00Z",
 		}
@@ -192,8 +193,8 @@ func TestMessagesAndConversations(t *testing.T) {
 		if err := response.UnmarshalBodyToObject(&result); err != nil {
 			t.Fatalf("Failed to unmarshal response: %v", err)
 		}
-		assert.Equal(t, "received", result["status"])
-		assert.NotEmpty(t, result["message_id"], "Expected message_id to be present in response")
+		assert.NotEmpty(t, result["provider_id"], "expected provider_id to be present in response")
+		assert.NotEmpty(t, result["message_id"], "expected message_id to be present in response")
 	})
 
 	t.Run("handle service request failure", func(t *testing.T) {
@@ -211,16 +212,24 @@ func TestMessagesAndConversations(t *testing.T) {
 			Type:        "sms",
 			Body:        "Hello, this is a test message.",
 			Attachments: []string{},
-			ProviderID:  "provider123",
 			CreatedAt:   "2023-10-01T12:00:00Z",
 		}
 
 		response := oapi.NewRequest().WithHeader("Content-Type", "application/json").Post(path).WithJsonBody(body).GoWithHTTPHandler(t, e)
-		if response.Code() != http.StatusInternalServerError {
-			t.Fatalf("Expected status code 500, got %d", response.Code())
+		if response.Code() != http.StatusCreated {
+			// Even though the service request failed, we still expect the message to be saved to be retried later
+			t.Fatalf("Expected status code 201, got %d", response.Code())
 		}
 
 		assert.Equal(t, textService.RetryCount, 3, "expected multiple retries due to rate limiting")
+
+		result := make(map[string]string)
+		if err := response.UnmarshalBodyToObject(&result); err != nil {
+			t.Fatalf("Failed to unmarshal response: %v", err)
+		}
+
+		assert.Empty(t, result["provider_id"], "expected provider_id to be empty due to service failure")
+		assert.NotEmpty(t, result["message_id"], "expected message_id to be present in response")
 	})
 
 	t.Run("get conversations", func(t *testing.T) {

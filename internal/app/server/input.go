@@ -15,7 +15,7 @@ type TextMessage struct {
 	CreatedAt   string   `json:"timestamp" validate:"required,datetime=2006-01-02T15:04:05Z"`
 }
 
-func (m *TextMessage) ToRepositoryMessage() (repository.Message, error) {
+func (m *TextMessage) ToRepositoryMessage(status string) (repository.Message, error) {
 	msg := repository.Message{
 		From:        m.From,
 		To:          m.To,
@@ -24,6 +24,7 @@ func (m *TextMessage) ToRepositoryMessage() (repository.Message, error) {
 		Attachments: m.Attachments,
 		ProviderID:  m.ProviderID,
 		CreatedAt:   m.CreatedAt,
+		Status:      status,
 	}
 
 	// Determine the communication type based on the message type
@@ -48,7 +49,7 @@ type EmailMessage struct {
 	CreatedAt   string   `json:"timestamp" validate:"required,datetime=2006-01-02T15:04:05Z"`
 }
 
-func (m *EmailMessage) ToRepositoryMessage() (repository.Message, error) {
+func (m *EmailMessage) ToRepositoryMessage(status string) (repository.Message, error) {
 	msg := repository.Message{
 		From:              m.From,
 		To:                m.To,
@@ -58,6 +59,7 @@ func (m *EmailMessage) ToRepositoryMessage() (repository.Message, error) {
 		Attachments:       m.Attachments,
 		ProviderID:        m.ProviderID,
 		CreatedAt:         m.CreatedAt,
+		Status:            status,
 	}
 
 	return msg, nil

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hatchapp/internal/pkg/apperrors"
 
@@ -52,47 +53,106 @@ func (r *PostgresRepository) GetDriver() *sql.DB {
 
 func (r *PostgresRepository) CreateMessage(ctx context.Context, msg Message) (*int64, error) {
 	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{
-		Isolation: sql.LevelSerializable, // safest when concurrent inserts are possible
+		Isolation: sql.LevelSerializable,
 	})
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = tx.Rollback() }() // no‑op if Commit succeeded
+	defer tx.Rollback() // Ensure rollback on error, unless committed
 
-	const query = `
-		SELECT create_message(
-			$1, -- p_from
-			$2, -- p_to
-			$3, -- p_provider_id
-			$4, -- p_message_type
-			$5, -- p_communication_type
-			$6, -- p_body
-			$7, -- p_attachments
-			$8  -- p_created_at
-		)
+	var fromID, toID, conversationID, messageID int64
+
+	// 1. Upsert communications
+	upsertCommQuery := `
+		INSERT INTO communications (identifier, communication_type)
+		VALUES ($1, $2)
+		ON CONFLICT (identifier) DO NOTHING
 	`
-	var msgID int64
-	if err := tx.QueryRowContext(
-		ctx,
-		query,
-		msg.From,
-		msg.To,
+
+	if _, err := tx.ExecContext(ctx, upsertCommQuery, msg.From, msg.CommunicationType); err != nil {
+		return nil, apperrors.NewDBError(err, "failed to upsert communication for sender")
+	}
+	if _, err := tx.ExecContext(ctx, upsertCommQuery, msg.To, msg.CommunicationType); err != nil {
+		return nil, apperrors.NewDBError(err, "failed to upsert communication for recipient")
+	}
+
+	// 2. Lookup IDs for both communications
+	getCommIDQuery := `SELECT id FROM communications WHERE identifier = $1`
+	if err := tx.QueryRowContext(ctx, getCommIDQuery, msg.From).Scan(&fromID); err != nil {
+		return nil, apperrors.NewDBError(err, "failed to get sender communication ID")
+	}
+	if err := tx.QueryRowContext(ctx, getCommIDQuery, msg.To).Scan(&toID); err != nil {
+		return nil, apperrors.NewDBError(err, "failed to get recipient communication ID")
+	}
+
+	// 3. Try to find an existing conversation with just these two participants
+	findConversationQuery := `
+		SELECT cm.conversation_id
+		FROM conversation_memberships cm
+		WHERE cm.communication_id IN ($1, $2)
+		GROUP BY cm.conversation_id
+		HAVING COUNT(*) = 2 AND bool_and(cm.communication_id IN ($1, $2))
+		LIMIT 1
+	`
+
+	if err := tx.QueryRowContext(ctx, findConversationQuery, fromID, toID).Scan(&conversationID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// 4. Create new conversation
+			createConvQuery := `INSERT INTO conversations (created_at) VALUES (now()) RETURNING id`
+			if err := tx.QueryRowContext(ctx, createConvQuery).Scan(&conversationID); err != nil {
+				return nil, apperrors.NewDBError(err, "failed to create new conversation")
+			}
+
+			// 5. Insert conversation memberships
+			insertMembershipQuery := `
+				INSERT INTO conversation_memberships (conversation_id, communication_id)
+				VALUES ($1, $2), ($1, $3)
+				ON CONFLICT DO NOTHING
+			`
+			if _, err := tx.ExecContext(ctx, insertMembershipQuery, conversationID, fromID, toID); err != nil {
+				return nil, apperrors.NewDBError(err, "failed to insert conversation memberships")
+			}
+		} else {
+			return nil, err
+		}
+	}
+
+	// 6. Insert the message
+	insertMessageQuery := `
+		INSERT INTO messages (
+			conversation_id,
+			sender_id,
+			provider_id,
+			message_type,
+			body,
+			attachments,
+			created_at,
+			message_status
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		RETURNING id
+	`
+
+	if err := tx.QueryRowContext(ctx, insertMessageQuery,
+		conversationID,
+		fromID,
 		msg.ProviderID,
 		msg.Type,
-		msg.CommunicationType,
 		msg.Body,
 		pq.Array(msg.Attachments),
 		msg.CreatedAt,
-	).Scan(&msgID); err != nil {
-		return nil, apperrors.NewDBError(err, "failed to create message")
+		msg.Status,
+	).Scan(&messageID); err != nil {
+		return nil, apperrors.NewDBError(err, "failed to insert message")
 	}
 
 	if err := tx.Commit(); err != nil {
-		log.Errorf("failed to commit transaction: %v", err)
 		return nil, apperrors.NewDBError(err, "failed to commit transaction")
 	}
-	return &msgID, nil
+
+	return &messageID, nil
 }
+
 func (r *PostgresRepository) GetConversations(ctx context.Context) ([]Conversation, error) {
 	const query = `
 		SELECT
@@ -162,7 +222,7 @@ func (r *PostgresRepository) GetConversationByID(ctx context.Context, id string)
 		FROM conversations c
 		LEFT JOIN messages m ON m.conversation_id = c.id
 		LEFT JOIN communications comm ON comm.id = m.sender_id
-		WHERE c.id = $1
+		WHERE c.id = $1 AND m.message_status = 'success'
 		GROUP BY c.id;
 	`
 
