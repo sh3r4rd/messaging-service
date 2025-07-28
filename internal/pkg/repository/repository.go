@@ -3,10 +3,10 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"hatchapp/internal/pkg/apperrors"
+	"time"
 
 	"github.com/labstack/gommon/log"
 	"github.com/lib/pq"
@@ -156,44 +156,63 @@ func (r *PostgresRepository) CreateMessage(ctx context.Context, msg Message) (*i
 func (r *PostgresRepository) GetConversations(ctx context.Context) ([]Conversation, error) {
 	const query = `
 		SELECT
-		c.id AS conversation_id,
-		c.created_at,
-		COALESCE(
-			JSONB_AGG(
-				JSONB_BUILD_OBJECT(
-					'id', comm.id,
-					'identifier', comm.identifier,
-					'type', comm.communication_type
-				)
-			) FILTER (WHERE comm.id IS NOT NULL), '[]'
-		) AS participants
+		  c.id AS conversation_id,
+		  c.created_at,
+		  comm.id AS participant_id,
+		  comm.identifier,
+		  comm.communication_type
 		FROM conversations c
 		LEFT JOIN conversation_memberships cm ON cm.conversation_id = c.id
 		LEFT JOIN communications comm ON comm.id = cm.communication_id
-		GROUP BY c.id
 		ORDER BY c.created_at DESC;
 	`
+
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var conversations []Conversation
+
+	conversationMap := make(map[int64]*Conversation)
+
 	for rows.Next() {
-		var conv Conversation
-		var participantsJSON []byte
-		if err := rows.Scan(&conv.ID, &conv.CreatedAt, &participantsJSON); err != nil {
-			return nil, apperrors.NewDBError(err, "failed to get conversations")
+		var convID int64
+		var createdAt time.Time
+		var participantID sql.NullInt64
+		var identifier sql.NullString
+		var commType sql.NullString
+
+		if err := rows.Scan(&convID, &createdAt, &participantID, &identifier, &commType); err != nil {
+			return nil, apperrors.NewDBError(err, "failed to scan conversation row")
 		}
 
-		if err := json.Unmarshal(participantsJSON, &conv.Participants); err != nil {
-			return nil, apperrors.NewDBError(err, "failed to unmarshal participants for conversation")
+		conv, exists := conversationMap[convID]
+		if !exists {
+			conv = &Conversation{
+				ID:           convID,
+				CreatedAt:    createdAt.Format(time.RFC3339),
+				Participants: []Communication{},
+			}
+			conversationMap[convID] = conv
 		}
 
-		conversations = append(conversations, conv)
+		if participantID.Valid {
+			conv.Participants = append(conv.Participants, Communication{
+				ID:         participantID.Int64,
+				Identifier: identifier.String,
+				Type:       commType.String,
+			})
+		}
 	}
+
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, apperrors.NewDBError(err, "encountered error while iterating database rows")
+	}
+
+	// Convert map to slice
+	conversations := make([]Conversation, 0, len(conversationMap))
+	for _, conv := range conversationMap {
+		conversations = append(conversations, *conv)
 	}
 
 	return conversations, nil
@@ -204,44 +223,76 @@ func (r *PostgresRepository) GetConversationByID(ctx context.Context, id string)
 		SELECT
 			c.id AS conversation_id,
 			c.created_at,
-			COALESCE(
-				JSONB_AGG(
-					JSONB_BUILD_OBJECT(
-						'id', m.id,
-						'from', comm.identifier,
-						'type', m.message_type,
-						'body', m.body,
-						'attachments', m.attachments,
-						'provider_id', m.provider_id,
-						'timestamp', m.created_at,
-						'id', m.id
-					)
-					ORDER BY m.created_at
-				) FILTER (WHERE m.id IS NOT NULL), '[]'
-			) AS messages
+			m.id AS message_id,
+			comm.identifier AS sender_identifier,
+			m.message_type,
+			m.body,
+			m.attachments,
+			m.provider_id,
+			m.created_at AS message_created_at
 		FROM conversations c
 		LEFT JOIN messages m ON m.conversation_id = c.id
 		LEFT JOIN communications comm ON comm.id = m.sender_id
 		WHERE c.id = $1 AND m.message_status = 'success'
-		GROUP BY c.id;
+		ORDER BY m.created_at;
 	`
 
-	var conv Conversation
-	var messagesJSON []byte
-	row := r.db.QueryRowContext(ctx, query, id)
+	rows, err := r.db.QueryContext(ctx, query, id)
+	if err != nil {
+		return nil, apperrors.NewDBError(err, fmt.Sprintf("failed to query conversation %s", id))
+	}
+	defer rows.Close()
 
-	if err := row.Scan(&conv.ID, &conv.CreatedAt, &messagesJSON); err != nil {
-		if err == sql.ErrNoRows {
-			log.Info("no conversation found with id:", id)
-			return nil, apperrors.DBErrorNotFound
+	var conv *Conversation
+	for rows.Next() {
+		var (
+			convID      int64
+			createdAt   time.Time
+			msgID       sql.NullInt64
+			from        sql.NullString
+			msgType     sql.NullString
+			body        sql.NullString
+			attachments pq.StringArray
+			providerID  sql.NullString
+			timestamp   sql.NullTime
+		)
+
+		if err := rows.Scan(
+			&convID, &createdAt,
+			&msgID, &from, &msgType, &body,
+			&attachments, &providerID, &timestamp,
+		); err != nil {
+			return nil, apperrors.NewDBError(err, "failed to scan conversation row")
 		}
 
-		return nil, apperrors.NewDBError(err, fmt.Sprintf("failed to get conversation with id: %s", id))
+		if conv == nil {
+			conv = &Conversation{
+				ID:        convID,
+				CreatedAt: createdAt.Format(time.RFC3339),
+				Messages:  []Message{},
+			}
+		}
+
+		if msgID.Valid {
+			conv.Messages = append(conv.Messages, Message{
+				ID:          msgID.Int64,
+				From:        from.String,
+				Type:        msgType.String,
+				Body:        body.String,
+				Attachments: attachments,
+				ProviderID:  providerID.String,
+				CreatedAt:   timestamp.Time.Format(time.RFC3339),
+			})
+		}
 	}
 
-	if err := json.Unmarshal(messagesJSON, &conv.Messages); err != nil {
-		return nil, apperrors.NewDBError(err, "failed to unmarshal conversation messages")
+	if err := rows.Err(); err != nil {
+		return nil, apperrors.NewDBError(err, "error during row iteration")
 	}
 
-	return &conv, nil
+	if conv == nil {
+		return nil, apperrors.DBErrorNotFound
+	}
+
+	return conv, nil
 }
