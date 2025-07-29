@@ -116,8 +116,6 @@ func Run() {
 								return nil
 							}
 
-							fmt.Printf("Type of error: %T\n", err)
-
 							// Handle dirty state
 							var dbErr database.Error
 							var dirtyErr migrate.ErrDirty

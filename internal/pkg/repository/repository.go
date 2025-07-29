@@ -233,11 +233,11 @@ func (r *PostgresRepository) GetConversationByID(ctx context.Context, id string)
 		FROM conversations c
 		LEFT JOIN messages m ON m.conversation_id = c.id
 		LEFT JOIN communications comm ON comm.id = m.sender_id
-		WHERE c.id = $1 AND m.message_status = 'success'
+		WHERE c.id = $1 AND m.message_status = $2
 		ORDER BY m.created_at;
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, id)
+	rows, err := r.db.QueryContext(ctx, query, id, MessageStatusSuccess)
 	if err != nil {
 		return nil, apperrors.NewDBError(err, fmt.Sprintf("failed to query conversation %s", id))
 	}
