@@ -164,10 +164,14 @@ func (r *PostgresRepository) GetConversations(ctx context.Context) ([]Conversati
 		FROM conversations c
 		LEFT JOIN conversation_memberships cm ON cm.conversation_id = c.id
 		LEFT JOIN communications comm ON comm.id = cm.communication_id
+		WHERE EXISTS (
+			SELECT 1 FROM messages m
+			WHERE m.conversation_id = c.id AND m.message_status = $1
+		)
 		ORDER BY c.created_at DESC;
 	`
 
-	rows, err := r.db.QueryContext(ctx, query)
+	rows, err := r.db.QueryContext(ctx, query, MessageStatusSuccess)
 	if err != nil {
 		return nil, err
 	}

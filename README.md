@@ -31,41 +31,47 @@ Based on the `EXPLAIN ANALYZE` output they're working as expected
 
 I do have to turn `SET enable_seqscan = OFF;` for _this_ index to be used. There are so few items in the db that the query planner may opt for a sequential scan instead if it's cheaper for this query.
 ```
-Sort  (cost=34.71..34.72 rows=3 width=48) (actual time=0.821..0.947 rows=3 loops=1)
+Sort  (cost=34.80..34.80 rows=2 width=60) (actual time=1.170..1.351 rows=6 loops=1)
    Sort Key: c.created_at DESC
    Sort Method: quicksort  Memory: 25kB
-   ->  GroupAggregate  (cost=0.41..34.69 rows=3 width=48) (actual time=0.353..0.858 rows=3 loops=1)
-         Group Key: c.id
-         ->  Nested Loop Left Join  (cost=0.41..34.60 rows=6 width=43) (actual time=0.133..0.629 rows=6 loops=1)
-               ->  Merge Left Join  (cost=0.26..24.48 rows=6 width=24) (actual time=0.070..0.287 rows=6 loops=1)
-                     Merge Cond: (c.id = cm.conversation_id)
-                     ->  Index Scan using conversations_pkey on conversations c  (cost=0.13..12.18 rows=3 width=16) (actual time=0.021..0.051 rows=3 loops=1)
-                     ->  Index Only Scan using conversation_memberships_pkey on conversation_memberships cm  (cost=0.13..12.22 rows=6 width=16) (actual time=0.023..0.080 rows=6 loops=1)
-                           Heap Fetches: 6
-               ->  Memoize  (cost=0.14..2.16 rows=1 width=27) (actual time=0.025..0.029 rows=1 loops=6)
-                     Cache Key: cm.communication_id
-                     Cache Mode: logical
-                     Hits: 1  Misses: 5  Evictions: 0  Overflows: 0  Memory Usage: 1kB
-                     ->  Index Scan using communications_pkey on communications comm  (cost=0.13..2.15 rows=1 width=27) (actual time=0.012..0.013 rows=1 loops=5)
-                           Index Cond: (id = cm.communication_id)
+   ->  Nested Loop Left Join  (cost=17.63..34.79 rows=2 width=60) (actual time=0.416..1.219 rows=6 loops=1)
+         ->  Nested Loop Left Join  (cost=17.48..34.39 rows=2 width=24) (actual time=0.363..0.973 rows=6 loops=1)
+               ->  Nested Loop  (cost=17.33..33.54 rows=2 width=16) (actual time=0.313..0.717 rows=3 loops=1)
+                     ->  Unique  (cost=17.17..17.18 rows=2 width=8) (actual time=0.263..0.559 rows=3 loops=1)
+                           ->  Sort  (cost=17.17..17.18 rows=2 width=8) (actual time=0.247..0.350 rows=10 loops=1)
+                                 Sort Key: m.conversation_id
+                                 Sort Method: quicksort  Memory: 25kB
+                                 ->  Bitmap Heap Scan on messages m  (cost=11.82..17.16 rows=2 width=8) (actual time=0.042..0.153 rows=10 loops=1)
+                                       Recheck Cond: (message_status = 'success'::message_status)
+                                       Heap Blocks: exact=1
+                                       ->  Bitmap Index Scan on idx_messages_conversation_id_status  (cost=0.00..11.82 rows=2 width=0) (actual time=0.019..0.026 rows=10 loops=1)
+                                             Index Cond: (message_status = 'success'::message_status)
+                     ->  Index Scan using conversations_pkey on conversations c  (cost=0.15..8.17 rows=1 width=16) (actual time=0.014..0.016 rows=1 loops=3)
+                           Index Cond: (id = m.conversation_id)
+               ->  Index Only Scan using conversation_memberships_pkey on conversation_memberships cm  (cost=0.15..0.34 rows=9 width=16) (actual time=0.015..0.031 rows=2 loops=3)
+                     Index Cond: (conversation_id = c.id)
+                     Heap Fetches: 6
+         ->  Index Scan using communications_pkey on communications comm  (cost=0.15..0.20 rows=1 width=44) (actual time=0.012..0.013 rows=1 loops=6)
+               Index Cond: (id = cm.communication_id)
+ Planning Time: 0.414 ms
+ Execution Time: 1.635 ms
 ```
 
 ### Get conversation by ID
 
 ```
- GroupAggregate  (cost=4.48..26.35 rows=1 width=48) (actual time=0.706..0.811 rows=1 loops=1)
-   Group Key: c.id
-   ->  Nested Loop Left Join  (cost=4.48..26.33 rows=1 width=164) (actual time=0.229..0.521 rows=4 loops=1)
-         ->  Nested Loop Left Join  (cost=4.32..19.49 rows=1 width=140) (actual time=0.182..0.327 rows=4 loops=1)
-               Join Filter: (m.conversation_id = c.id)
-               ->  Index Scan using conversations_pkey on conversations c  (cost=0.15..8.17 rows=1 width=16) (actual time=0.126..0.140 rows=1 loops=1)
-                     Index Cond: (id = 2)
-               ->  Bitmap Heap Scan on messages m  (cost=4.17..11.28 rows=3 width=132) (actual time=0.028..0.076 rows=4 loops=1)
-                     Recheck Cond: (conversation_id = 2)
-                     Heap Blocks: exact=1
-                     ->  Bitmap Index Scan on idx_messages_conversation_id_created_at  (cost=0.00..4.17 rows=3 width=0) (actual time=0.011..0.018 rows=4 loops=1)
-                           Index Cond: (conversation_id = 2)
-         ->  Index Scan using communications_pkey on communications comm  (cost=0.15..6.84 rows=1 width=40) (actual time=0.013..0.015 rows=1 loops=4)
+ Sort  (cost=24.54..24.55 rows=1 width=164) (actual time=0.541..0.646 rows=4 loops=1)
+   Sort Key: m.created_at
+   Sort Method: quicksort  Memory: 25kB
+   ->  Nested Loop Left Join  (cost=0.45..24.53 rows=1 width=164) (actual time=0.195..0.536 rows=4 loops=1)
+         ->  Nested Loop  (cost=0.30..16.35 rows=1 width=140) (actual time=0.146..0.285 rows=4 loops=1)
+               ->  Index Scan using conversations_pkey on conversations c  (cost=0.15..8.17 rows=1 width=16) (actual time=0.090..0.105 rows=1 loops=1)
+                     Index Cond: (id = 1)
+               ->  Index Scan using idx_messages_conversation_id_status on messages m  (cost=0.15..8.17 rows=1 width=132) (actual time=0.028..0.066 rows=4 loops=1)
+                     Index Cond: ((conversation_id = 1) AND (message_status = 'success'::message_status))
+         ->  Index Scan using communications_pkey on communications comm  (cost=0.15..8.17 rows=1 width=40) (actual time=0.013..0.015 rows=1 loops=4)
                Index Cond: (id = m.sender_id)
+ Planning Time: 0.320 ms
+ Execution Time: 0.790 ms
 ```
 

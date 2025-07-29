@@ -39,3 +39,7 @@ CREATE INDEX idx_messages_conversation_id_created_at ON messages(conversation_id
 
 -- Speeds up JOIN: messages -> communications BY messages.sender_id
 CREATE INDEX idx_messages_sender_id ON messages(sender_id);
+
+-- Speeds up JOIN: messages for conversation by status
+CREATE INDEX idx_messages_conversation_id_status ON messages(conversation_id, message_status);
+
