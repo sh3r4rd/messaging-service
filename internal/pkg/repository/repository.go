@@ -174,6 +174,7 @@ func (r *PostgresRepository) GetConversations(ctx context.Context) ([]Conversati
 	defer rows.Close()
 
 	conversationMap := make(map[int64]*Conversation)
+	orderedIDs := make([]int64, 0)
 
 	for rows.Next() {
 		var convID int64
@@ -194,6 +195,7 @@ func (r *PostgresRepository) GetConversations(ctx context.Context) ([]Conversati
 				Participants: []Communication{},
 			}
 			conversationMap[convID] = conv
+			orderedIDs = append(orderedIDs, convID) // record retrieval order
 		}
 
 		if participantID.Valid {
@@ -209,10 +211,9 @@ func (r *PostgresRepository) GetConversations(ctx context.Context) ([]Conversati
 		return nil, apperrors.NewDBError(err, "encountered error while iterating database rows")
 	}
 
-	// Convert map to slice
-	conversations := make([]Conversation, 0, len(conversationMap))
-	for _, conv := range conversationMap {
-		conversations = append(conversations, *conv)
+	conversations := make([]Conversation, 0, len(orderedIDs))
+	for _, id := range orderedIDs {
+		conversations = append(conversations, *conversationMap[id])
 	}
 
 	return conversations, nil
@@ -287,7 +288,7 @@ func (r *PostgresRepository) GetConversationByID(ctx context.Context, id string)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, apperrors.NewDBError(err, "error during row iteration")
+		return nil, apperrors.NewDBError(err, "encountered error while iterating database rows")
 	}
 
 	if conv == nil {
