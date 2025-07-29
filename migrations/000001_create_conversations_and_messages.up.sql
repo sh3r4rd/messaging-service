@@ -1,5 +1,6 @@
-CREATE TYPE message_type AS ENUM ('mms', 'sms', 'email');
 CREATE TYPE communication_type AS ENUM ('phone', 'email');
+CREATE TYPE message_type AS ENUM ('mms', 'sms', 'email');
+CREATE TYPE message_status AS ENUM ('success', 'failed');
 
 CREATE TABLE IF NOT EXISTS communications (
     id BIGSERIAL PRIMARY KEY,
@@ -29,7 +30,8 @@ CREATE TABLE IF NOT EXISTS messages (
     message_type message_type NOT NULL,
     body TEXT,
     attachments TEXT[],
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    message_status message_status NOT NULL
 );
 
 -- Speeds up JOIN: conversations -> messages and ORDER BY messages.created_at
@@ -37,3 +39,7 @@ CREATE INDEX idx_messages_conversation_id_created_at ON messages(conversation_id
 
 -- Speeds up JOIN: messages -> communications BY messages.sender_id
 CREATE INDEX idx_messages_sender_id ON messages(sender_id);
+
+-- Speeds up JOIN: messages for conversation by status
+CREATE INDEX idx_messages_conversation_id_status ON messages(conversation_id, message_status);
+

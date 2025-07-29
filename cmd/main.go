@@ -2,11 +2,11 @@ package cmd
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"hatchapp/config"
 	"hatchapp/internal/app/server"
+	"hatchapp/internal/pkg/migration"
 	"hatchapp/internal/pkg/repository"
 	"os"
 
@@ -15,7 +15,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database/postgres"
+	"github.com/golang-migrate/migrate/v4/database"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/lib/pq"
 )
@@ -103,21 +103,9 @@ func Run() {
 					dbName := cliCmd.String("db-name")
 
 					connectionString := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", username, password, host, port, dbName)
-					db, err := sql.Open("postgres", connectionString)
+					m, err := migration.Initialize(connectionString)
 					if err != nil {
-						return fmt.Errorf("failed to connect to database: %w", err)
-					}
-
-					driver, err := postgres.WithInstance(db, &postgres.Config{})
-					if err != nil {
-						return fmt.Errorf("failed to create database driver: %w", err)
-					}
-
-					m, err := migrate.NewWithDatabaseInstance(
-						"file://migrations",
-						"postgres", driver)
-					if err != nil {
-						return fmt.Errorf("failed to create migration instance: %w", err)
+						return fmt.Errorf("failed to initialize migration: %w", err)
 					}
 
 					switch cliCmd.String("direction") {
@@ -129,19 +117,17 @@ func Run() {
 							}
 
 							// Handle dirty state
+							var dbErr database.Error
 							var dirtyErr migrate.ErrDirty
-							if errors.As(err, &dirtyErr) {
-								version, _, verErr := m.Version()
-								if verErr != nil {
-									return fmt.Errorf("failed to get dirty migration version: %w", verErr)
-								}
-								fmt.Printf("Database is dirty at version %d. Forcing clean state...\n", version)
-								if forceErr := m.Force(int(version)); forceErr != nil {
-									return fmt.Errorf("failed to force migration version: %w", forceErr)
+							if errors.As(err, &dbErr) || errors.As(err, &dirtyErr) {
+								err = migration.Rollback(m, "up")
+								if err != nil {
+									log.Errorf("failed to roll back migration: %v", err)
 								}
 
-								return fmt.Errorf("migration error, please re-run the migration after cleaning up")
+								return nil
 							}
+
 							return fmt.Errorf("failed to apply migrations: %w", err)
 						}
 					case "down":
@@ -151,7 +137,17 @@ func Run() {
 								return nil
 							}
 
-							return fmt.Errorf("failed to roll back migrations: %w", err)
+							// Handle dirty state
+							var dbErr database.Error
+							var dirtyErr migrate.ErrDirty
+							if errors.As(err, &dbErr) || errors.As(err, &dirtyErr) {
+								err = migration.Rollback(m, "down")
+								if err != nil {
+									log.Errorf("failed to roll back migration: %v", err)
+								}
+							}
+
+							return fmt.Errorf("failed to apply migrations: %w", err)
 						}
 					default:
 						return fmt.Errorf("invalid migration direction: %s", cliCmd.String("direction"))

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"hatchapp/internal/pkg/apperrors"
 	"io"
+	"math/rand"
 	"net/http"
 	"strings"
 	"time"
@@ -105,7 +106,7 @@ func NewTextServiceWithError(apiKey, accountID string, statusCode int, body stri
 	}
 }
 
-func (s *ExternalService) SendMessageWithRetries(from, to, body string, attachments []string) error {
+func (s *ExternalService) SendMessageWithRetries(from, to, body string, attachments []string) (string, error) {
 	// Many API services return a 429 Too Many Requests status code when rate limiting.
 	// The `Retry-After` header can be used to determine how long to wait before retrying (exponential backoff).
 	// I'm opting for a simple retry mechanism here.
@@ -120,13 +121,13 @@ func (s *ExternalService) SendMessageWithRetries(from, to, body string, attachme
 
 		switch resp.StatusCode {
 		case http.StatusUnauthorized:
-			return apperrors.NewServiceError(err, "unauthorized: check your API key or account ID")
+			return "", apperrors.NewServiceError(err, "unauthorized: check your API key or account ID")
 		case http.StatusNotFound:
-			return apperrors.NewServiceError(err, "not found")
+			return "", apperrors.NewServiceError(err, "not found")
 		case http.StatusForbidden:
-			return apperrors.NewServiceError(err, "access forbidden")
+			return "", apperrors.NewServiceError(err, "access forbidden")
 		case http.StatusBadRequest:
-			return apperrors.NewServiceError(err, "bad request")
+			return "", apperrors.NewServiceError(err, "bad request")
 		case http.StatusInternalServerError:
 			log.Warnf("Retrying due to server error (%d/%d)...\n", s.RetryCount+1, MaxRetries)
 			s.RetryCount++
@@ -137,14 +138,15 @@ func (s *ExternalService) SendMessageWithRetries(from, to, body string, attachme
 			continue
 		case http.StatusOK:
 			log.Infof("Message sent successfully")
-			return nil
+			mockID := fmt.Sprintf("message-%d", rand.Intn(100)) // Mock message ID for demonstration
+			return mockID, nil
 		default:
 			log.Warnf("Unexpected status code %d: %v", resp.StatusCode, err)
-			return apperrors.NewServiceError(err, fmt.Sprintf("unexpected status code from service: %d", resp.StatusCode))
+			return "", apperrors.NewServiceError(err, fmt.Sprintf("unexpected status code from service: %d", resp.StatusCode))
 		}
 	}
 
-	return fmt.Errorf("failed to send message after %d retries", MaxRetries)
+	return "", fmt.Errorf("failed to send message after %d retries", MaxRetries)
 }
 
 func (s *ExternalService) sendMessage(from, to, body string, attachments []string) (*http.Response, error) {
